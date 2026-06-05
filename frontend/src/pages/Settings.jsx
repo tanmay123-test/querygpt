@@ -183,7 +183,7 @@ export default function Settings() {
                     <div className="relative">
                       <input 
                         type={showApiKey ? 'text' : 'password'}
-                        value="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"
+                        value="gsk_••••••••••••••••••••••••••••••••"
                         readOnly
                         className="w-full px-3 py-2.5 pr-10 rounded-lg border border-gray-200 bg-gray-50 text-sm font-mono outline-none"
                       />
