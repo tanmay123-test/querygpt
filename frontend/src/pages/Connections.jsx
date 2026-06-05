@@ -34,7 +34,8 @@ const INITIAL_CONNECTIONS = [
 
 export default function Connections() {
   const navigate = useNavigate()
-  const [connections, setConnections] = useState(INITIAL_CONNECTIONS)
+  const [connections, setConnections] = useState([])
+  const [loading, setLoading] = useState(true)
   const [form, setForm] = useState({
     connectionName: '',
     dbType: 'PostgreSQL',
@@ -45,10 +46,34 @@ export default function Connections() {
     password: ''
   })
   const [showPassword, setShowPassword] = useState(false)
-  const [testStatus, setTestStatus] = useState(null)
+  const [testResult, setTestResult] = useState(null)
   const [testing, setTesting] = useState(false)
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState(null)
+
+  useEffect(() => {
+    fetchConnections()
+  }, [])
+
+  const fetchConnections = async () => {
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch(
+        `${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/connections`,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        }
+      )
+      const data = await res.json()
+      setConnections(Array.isArray(data) ? data : [])
+    } catch(e) {
+      console.error(e)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const handleInputChange = (e) => {
     const { name, value } = e.target
@@ -58,6 +83,10 @@ export default function Connections() {
         if (value === 'PostgreSQL') newForm.port = '5432'
         else if (value === 'MySQL') newForm.port = '3306'
         else if (value === 'MongoDB') newForm.port = '27017'
+        else if (value === 'SQLite') {
+          newForm.port = ''
+          newForm.host = ''
+        }
       }
       return newForm
     })
@@ -65,43 +94,114 @@ export default function Connections() {
 
   const handleTestConnection = async () => {
     setTesting(true)
-    setTestStatus(null)
-    await new Promise(resolve => setTimeout(resolve, 2000))
-    setTestStatus('success')
-    setTesting(false)
+    setTestResult(null)
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch(
+        `${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/connections/test`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            db_type: form.dbType.toLowerCase(),
+            host: form.host,
+            port: form.port ? parseInt(form.port) : 0,
+            database_name: form.dbName,
+            username: form.username,
+            password: form.password
+          })
+        }
+      )
+      const data = await res.json()
+      setTestResult(data)
+    } catch(e) {
+      setTestResult({
+        success: false,
+        message: 'Network error'
+      })
+    } finally {
+      setTesting(false)
+    }
   }
 
   const handleSaveConnection = async () => {
     if (!form.connectionName || !form.dbName) {
-      alert('Please fill required fields')
+      alert('Please fill Connection Name and Database Name')
+      return
+    }
+    if (!testResult || !testResult.success) {
+      alert('Please test connection first and ensure it succeeds')
       return
     }
     setSaving(true)
-    await new Promise(resolve => setTimeout(resolve, 1000))
-    
-    const newConn = {
-      id: Date.now(),
-      name: form.connectionName,
-      type: form.dbType.toUpperCase(),
-      host: `${form.host}:${form.port}`,
-      tables: 5,
-      status: 'Connected',
-      active: true
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch(
+        `${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/connections`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            name: form.connectionName,
+            db_type: form.dbType.toLowerCase(),
+            host: form.host,
+            port: form.port ? parseInt(form.port) : 0,
+            database_name: form.dbName,
+            username: form.username,
+            password: form.password
+          })
+        }
+      )
+      if (res.ok) {
+        await fetchConnections()
+        setForm({
+          connectionName: '',
+          dbType: 'PostgreSQL',
+          host: 'localhost',
+          port: '5432',
+          dbName: '',
+          username: 'postgres',
+          password: ''
+        })
+        setTestResult(null)
+        showToast('Connection saved successfully!')
+      } else {
+        const err = await res.json()
+        alert(`Failed to save: ${err.detail || 'Unknown error'}`)
+      }
+    } catch(e) {
+      alert('Failed to save connection')
+    } finally {
+      setSaving(false)
     }
-    
-    setConnections(prev => [...prev, newConn])
-    setSaving(false)
-    setForm({
-      connectionName: '',
-      dbType: 'PostgreSQL',
-      host: 'localhost',
-      port: '5432',
-      dbName: '',
-      username: 'postgres',
-      password: ''
-    })
-    setTestStatus(null)
-    showToast('Connection saved successfully!')
+  }
+
+  const handleDeleteConnection = async (id) => {
+    if (!window.confirm('Are you sure you want to delete this connection?')) return
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch(
+        `${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/connections/${id}`,
+        {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        }
+      )
+      if (res.ok) {
+        setConnections(prev => prev.filter(c => c.id !== id))
+        showToast('Connection deleted')
+      }
+    } catch(e) {
+      console.error(e)
+    }
   }
 
   const showToast = (message) => {
@@ -134,35 +234,43 @@ export default function Connections() {
           </div>
 
           <div className="grid grid-cols-3 gap-4">
-            {connections.map((conn) => (
+            {loading ? (
+              <div className="col-span-3 flex justify-center py-12">
+                <Spinner className="h-8 w-8 text-[#2563EB]" />
+              </div>
+            ) : connections.length === 0 ? (
+              <div className="col-span-3 text-center py-12 bg-white rounded-xl border-2 border-dashed border-[#e2e8f0]">
+                <p className="text-sm text-[#64748b]">No connections found. Add your first database below.</p>
+              </div>
+            ) : connections.map((conn) => (
               <div 
                 key={conn.id} 
                 className={`relative bg-white rounded-xl border border-[#e2e8f0] p-5 shadow-sm transition-all hover:shadow-md border-l-4 ${
-                  conn.active ? 'border-l-[#22c55e]' : 'border-l-[#94a3b8]'
+                  conn.is_active ? 'border-l-[#22c55e]' : 'border-l-[#94a3b8]'
                 }`}
               >
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
-                    <div className={`h-2 w-2 rounded-full ${conn.active ? 'bg-[#22c55e]' : 'bg-[#94a3b8]'}`} />
+                    <div className={`h-2 w-2 rounded-full ${conn.is_active ? 'bg-[#22c55e]' : 'bg-[#94a3b8]'}`} />
                     <span className="text-sm font-bold text-[#0f172a]">{conn.name}</span>
                   </div>
                   <span className={`text-[10px] font-bold rounded px-2 py-0.5 ${
-                    conn.type === 'POSTGRESQL' ? 'bg-blue-50 text-blue-600' : 'bg-green-50 text-green-600'
+                    conn.db_type === 'postgresql' ? 'bg-blue-50 text-blue-600' : 'bg-green-50 text-green-600'
                   }`}>
-                    {conn.type}
+                    {conn.db_type.toUpperCase()}
                   </span>
                 </div>
 
                 <div className="flex items-center gap-1.5 text-xs text-[#64748b] mb-3">
                   <LinkIcon className="h-3 w-3" />
-                  {conn.host}
+                  {conn.db_type === 'sqlite' ? 'Local File' : `${conn.host}:${conn.port}`}
                 </div>
 
                 <div className="flex items-center gap-1.5 text-xs font-medium mb-5">
-                  {conn.active ? (
+                  {conn.is_active ? (
                     <>
                       <CheckCircleIcon className="h-3.5 w-3.5 text-[#22c55e]" />
-                      <span className="text-[#22c55e]">{conn.tables} tables • Connected</span>
+                      <span className="text-[#22c55e]">{conn.database_name} • Connected</span>
                     </>
                   ) : (
                     <>
@@ -175,28 +283,18 @@ export default function Connections() {
                 </div>
 
                 <div className="flex gap-2 mt-auto">
-                  {conn.active ? (
-                    <>
-                      <button 
-                        onClick={() => navigate('/dashboard')}
-                        className="flex-1 bg-[#2563EB] text-white rounded-lg py-2 text-sm font-medium transition-colors hover:bg-blue-700"
-                      >
-                        Query
-                      </button>
-                      <button className="flex-1 border border-[#e2e8f0] text-[#64748b] rounded-lg py-2 text-sm font-medium transition-colors hover:bg-slate-50">
-                        Disconnect
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <button className="flex-1 bg-[#2563EB] text-white rounded-lg py-2 text-sm font-medium transition-colors hover:bg-blue-700">
-                        Reconnect
-                      </button>
-                      <button className="flex-1 border border-red-200 text-[#ef4444] rounded-lg py-2 text-sm font-medium transition-colors hover:bg-red-50">
-                        Delete
-                      </button>
-                    </>
-                  )}
+                  <button 
+                    onClick={() => navigate('/dashboard')}
+                    className="flex-1 bg-[#2563EB] text-white rounded-lg py-2 text-sm font-medium transition-colors hover:bg-blue-700"
+                  >
+                    Query
+                  </button>
+                  <button 
+                    onClick={() => handleDeleteConnection(conn.id)}
+                    className="flex-1 border border-red-200 text-[#ef4444] rounded-lg py-2 text-sm font-medium transition-colors hover:bg-red-50"
+                  >
+                    Delete
+                  </button>
                 </div>
               </div>
             ))}
@@ -234,7 +332,7 @@ export default function Connections() {
                 />
               </div>
 
-              {form.dbType !== 'SQLite' && (
+              {form.dbType !== 'SQLite' ? (
                 <div className="grid grid-cols-3 gap-4">
                   <div className="col-span-2">
                     <label className="text-sm font-medium text-[#475569] mb-1.5 block">Host / IP Address</label>
@@ -258,6 +356,11 @@ export default function Connections() {
                       className="w-full px-3 py-2.5 rounded-lg border border-gray-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-gray-50 text-sm text-gray-900 outline-none transition-all"
                     />
                   </div>
+                </div>
+              ) : (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-700"> 
+                  For SQLite, enter the full file path in Database Name field. 
+                  Example: C:/Users/Admin/mydata.db or: /home/user/mydata.db 
                 </div>
               )}
 
@@ -327,16 +430,23 @@ export default function Connections() {
 
           <div className="mt-8 flex items-center justify-between border-t border-[#f1f5f9] pt-6">
             <div>
-              {testStatus === 'success' && (
-                <div className="flex items-center gap-2 text-sm text-[#22c55e]">
-                  <CheckCircleIcon className="h-4 w-4" />
-                  Connection successful! 5 tables found.
+              {testResult && testResult.success && (
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-center gap-2 text-sm text-[#22c55e]">
+                    <CheckCircleIcon className="h-4 w-4" />
+                    {testResult.message}
+                  </div>
+                  {testResult.tables && testResult.tables.length > 0 && (
+                    <p className="text-xs text-[#64748b] ml-6 max-w-[400px] truncate">
+                      Tables: {testResult.tables.join(', ')}
+                    </p>
+                  )}
                 </div>
               )}
-              {testStatus === 'error' && (
+              {testResult && !testResult.success && (
                 <div className="flex items-center gap-2 text-sm text-[#ef4444]">
                   <span className="h-4 w-4 flex items-center justify-center rounded-full bg-red-100 font-bold text-[10px]">X</span>
-                  Connection failed. Check credentials.
+                  {testResult.message}
                 </div>
               )}
             </div>
@@ -347,7 +457,7 @@ export default function Connections() {
                 disabled={testing}
                 className="flex items-center gap-2 rounded-lg border border-[#2563EB] bg-white px-5 py-2.5 text-sm font-medium text-[#2563EB] transition-all hover:bg-blue-50 disabled:opacity-50"
               >
-                {testing ? <Spinner className="h-4 w-4" /> : <WifiIcon className="h-4 w-4" />}
+                {testing ? <Spinner className="h-4 w-4 animate-spin" /> : <WifiIcon className="h-4 w-4" />}
                 {testing ? 'Testing...' : 'Test Connection'}
               </button>
               <button 
@@ -355,7 +465,7 @@ export default function Connections() {
                 disabled={saving}
                 className="flex items-center gap-2 rounded-lg bg-[#2563EB] px-5 py-2.5 text-sm font-medium text-white transition-all hover:bg-blue-700 disabled:opacity-50"
               >
-                {saving && <Spinner className="h-4 w-4" />}
+                {saving && <Spinner className="h-4 w-4 animate-spin" />}
                 {saving ? 'Saving...' : 'Save Connection'}
               </button>
             </div>

@@ -4,8 +4,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import init_db
-from app.models import user, query_history  # noqa: F401 — register models with metadata
-from app.routes import auth, query
+from app.models import user, query_history, connection  # noqa: F401 — register models with metadata
+from app.routes import auth, query, history, connections
 
 
 @asynccontextmanager
@@ -33,6 +33,17 @@ app.include_router(
     query.router,
     prefix="",
     tags=["query"]
+)
+app.include_router( 
+    history.router, 
+    prefix="", 
+    tags=["history"] 
+) 
+
+app.include_router(
+    connections.router,
+    prefix="/connections",
+    tags=["connections"]
 )
 
 

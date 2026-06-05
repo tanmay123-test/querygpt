@@ -145,6 +145,26 @@ Rules:
             rows.append(row_data) 
             
     except Exception as e: 
+        try: 
+            await db.execute( 
+                text(""" 
+                    INSERT INTO query_history 
+                    (user_id, question, sql_generated, 
+                     row_count, status) 
+                    VALUES (:user_id, :question, 
+                            :sql, :row_count, :status) 
+                """), 
+                { 
+                    "user_id": current_user.id, 
+                    "question": request.question, 
+                    "sql": sql if 'sql' in locals() else "N/A", 
+                    "row_count": 0, 
+                    "status": "error" 
+                } 
+            ) 
+            await db.commit() 
+        except: 
+            pass 
         raise HTTPException(500, 
             f"Database error: {str(e)}") 
 
@@ -164,6 +184,27 @@ Rules:
         explanation = explain_completion.choices[0].message.content.strip() 
     except: 
         explanation = f"Query executed successfully" 
+
+    try: 
+        await db.execute( 
+            text(""" 
+                INSERT INTO query_history 
+                (user_id, question, sql_generated, 
+                 row_count, status) 
+                VALUES (:user_id, :question, 
+                        :sql, :row_count, :status) 
+            """), 
+            { 
+                "user_id": current_user.id, 
+                "question": request.question, 
+                "sql": sql, 
+                "row_count": len(rows), 
+                "status": "success" 
+            } 
+        ) 
+        await db.commit() 
+    except: 
+        pass 
 
     return QueryResponse( 
         question=request.question, 
