@@ -148,7 +148,13 @@ export default function Register() {
                 className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg bg-primary py-2.5 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:opacity-70"
               >
                 {loading ? (
-                  <Spinner className="text-white" />
+                  <span className="flex items-center justify-center gap-2">
+                    <span
+                      className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"
+                      style={{ width: '16px', height: '16px' }}
+                    ></span>
+                    Creating account...
+                  </span>
                 ) : (
                   <>
                     Create Account

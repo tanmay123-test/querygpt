@@ -116,20 +116,16 @@ export default function Login() {
                 className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary py-2.5 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:opacity-70"
               >
                 {loading ? (
-                  <>
-                    <span style={{
-                      width: '16px',
-                      height: '16px',
-                      border: '2px solid white',
-                      borderTop: '2px solid transparent',
-                      borderRadius: '50%',
-                      display: 'inline-block',
-                      animation: 'spin 0.8s linear infinite',
-                      marginRight: '8px'
-                    }}></span>
+                  <span className="flex items-center justify-center gap-2">
+                    <span
+                      className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"
+                      style={{ width: '16px', height: '16px' }}
+                    ></span>
                     Signing in...
-                  </>
-                ) : 'Sign In'}
+                  </span>
+                ) : (
+                  'Sign In'
+                )}
               </button>
 
               <div className="my-6 flex items-center gap-3">
