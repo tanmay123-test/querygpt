@@ -19,25 +19,21 @@ export default function App() {
     return () => clearTimeout(timer)
   }, [])
 
+  if (showSplash) {
+    return <SplashScreen />
+  }
+
   return (
-    <div className={`transition-opacity duration-300 ${showSplash ? 'opacity-100' : 'opacity-0'}`}>
-      {showSplash ? (
-        <SplashScreen />
-      ) : (
-        <div className="opacity-0 animate-[fade-in_0.3s_ease-out_forwards]">
-          <AuthProvider>
-            <Routes>
-              <Route path="/" element={<Navigate to="/login" replace />} />
-              <Route path="/login" element={<Login />} />
-              <Route path="/register" element={<Register />} />
-              <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/connections" element={<Connections />} />
-              <Route path="/history" element={<History />} />
-              <Route path="/settings" element={<Settings />} />
-            </Routes>
-          </AuthProvider>
-        </div>
-      )}
-    </div>
+    <AuthProvider>
+      <Routes>
+        <Route path="/" element={<Navigate to="/login" replace />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
+        <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/connections" element={<Connections />} />
+        <Route path="/history" element={<History />} />
+        <Route path="/settings" element={<Settings />} />
+      </Routes>
+    </AuthProvider>
   )
 }
